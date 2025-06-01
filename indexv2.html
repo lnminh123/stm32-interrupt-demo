@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STM32F103C8 Demo - Interrupt vs Polling</title>
+    <meta name="description" content="Interactive demo showing difference between Interrupt and Polling methods on STM32F103C8 microcontroller">
+    <meta name="keywords" content="STM32, interrupt, polling, microcontroller, embedded, demo">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .demo-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .demo-section {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .demo-section h2 {
+            margin-top: 0;
+            color: #ffd700;
+            text-align: center;
+        }
+
+        .stm32-board {
+            background: #2c3e50;
+            border-radius: 20px;
+            padding: 20px;
+            margin: 20px 0;
+            position: relative;
+            border: 3px solid #34495e;
+        }
+
+        .chip {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
+
+        .pin-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+        }
+
+        .pin {
+            width: 15px;
+            height: 15px;
+            background: #bdc3c7;
+            border-radius: 50%;
+            position: relative;
+        }
+
+        .pin.active {
+            background: #e74c3c;
+            box-shadow: 0 0 10px #e74c3c;
+        }
+
+        .led {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            background: #34495e;
+            margin: 10px auto;
+            transition: all 0.3s ease;
+            border: 3px solid #7f8c8d;
+        }
+
+        .led.on {
+            background: #e74c3c;
+            box-shadow: 0 0 20px #e74c3c, 0 0 40px #e74c3c;
+            border-color: #c0392b;
+        }
+
+        .button {
+            width: 50px;
+            height: 50px;
+            background: #3498db;
+            border: none;
+            border-radius: 10px;
+            margin: 10px auto;
+            display: block;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+            font-weight: bold;
+        }
+
+        .button:hover {
+            background: #2980b9;
+            transform: scale(1.05);
+        }
+
+        .button:active {
+            transform: scale(0.95);
+            background: #1f4e79;
+        }
+
+        .status {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .metric {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ffd700;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .code-section {
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .code-section h3 {
+            color: #ffd700;
+            margin-top: 0;
+        }
+
+        pre {
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .control-panel {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .control-btn {
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover {
+            background: #219a52;
+            transform: translateY(-2px);
+        }
+
+        .control-btn.stop {
+            background: #e74c3c;
+        }
+
+        .control-btn.stop:hover {
+            background: #c0392b;
+        }
+
+        @media (max-width: 768px) {
+            .demo-container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>STM32F103C8 - So sánh Interrupt vs Polling</h1>
+        
+        <div class="demo-container">
+            <!-- Polling Demo -->
+            <div class="demo-section">
+                <h2>🔄 POLLING MODE</h2>
+                <div class="stm32-board">
+                    <div class="chip">STM32F103C8T6</div>
+                    <div class="pin-row">
+                        <div class="pin" id="polling-pin-pa0"></div>
+                        <div class="pin" id="polling-pin-pc13"></div>
+                    </div>
+                    <div class="led" id="polling-led"></div>
+                    <button class="button" id="polling-btn">BTN</button>
+                </div>
+                
+                <div class="status" id="polling-status">
+                    System: Idle<br>
+                    CPU: Checking button continuously...
+                </div>
+                
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-value" id="polling-cpu">85%</div>
+                        <div class="metric-label">CPU Usage</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="polling-response">~2ms</div>
+                        <div class="metric-label">Response Time</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Interrupt Demo -->
+            <div class="demo-section">
+                <h2>⚡ INTERRUPT MODE</h2>
+                <div class="stm32-board">
+                    <div class="chip">STM32F103C8T6</div>  
+                    <div class="pin-row">
+                        <div class="pin" id="interrupt-pin-pa0"></div>
+                        <div class="pin" id="interrupt-pin-pc13"></div>
+                    </div>
+                    <div class="led" id="interrupt-led"></div>
+                    <button class="button" id="interrupt-btn">BTN</button>
+                </div>
+                
+                <div class="status" id="interrupt-status">
+                    System: Idle<br>
+                    CPU: Doing other tasks...
+                </div>
+                
+                <div class="metrics">
+                    <div class="metric">
+                        <div class="metric-value" id="interrupt-cpu">15%</div>
+                        <div class="metric-label">CPU Usage</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-value" id="interrupt-response">~0.1ms</div>
+                        <div class="metric-label">Response Time</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <button class="control-btn" onclick="startDemo()">▶ Bắt đầu Demo</button>
+            <button class="control-btn stop" onclick="stopDemo()">⏹ Dừng Demo</button>
+            <button class="control-btn" onclick="resetDemo()">🔄 Reset</button>
+        </div>
+
+        <div class="code-section">
+            <h3>📝 Code mẫu - Polling Mode</h3>
+            <pre><code>// POLLING MODE - Kiểm tra liên tục
+void main(void) {
+    // Khởi tạo GPIO
+    GPIO_InitTypeDef GPIO_InitStruct;
+    
+    // PC13 - LED (Output)
+    GPIO_InitStruct.Pin = GPIO_PIN_13;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+    
+    // PA0 - Button (Input with pull-up)
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    while(1) {
+        // Liên tục kiểm tra trạng thái nút nhấn
+        if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_RESET) {
+            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET); // LED ON
+            HAL_Delay(50); // Debounce
+        } else {
+            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);   // LED OFF
+        }
+        
+        // CPU bận rộn kiểm tra liên tục
+        // Không thể làm việc khác hiệu quả
+    }
+}</code></pre>
+        </div>
+
+        <div class="code-section">
+            <h3>📝 Code mẫu - Interrupt Mode</h3>
+            <pre><code>// INTERRUPT MODE - Xử lý sự kiện
+void main(void) {
+    // Khởi tạo GPIO
+    GPIO_InitTypeDef GPIO_InitStruct;
+    
+    // PC13 - LED (Output)
+    GPIO_InitStruct.Pin = GPIO_PIN_13;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+    
+    // PA0 - Button (Input with interrupt)
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING; // Ngắt cạnh xuống
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // Cấu hình NVIC cho ngắt EXTI0
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+    
+    while(1) {
+        // CPU có thể làm các công việc khác
+        processData();        // Xử lý dữ liệu
+        updateDisplay();      // Cập nhật màn hình
+        communicateUART();    // Giao tiếp UART
+        
+        // Chỉ khi có ngắt mới xử lý nút nhấn
+        HAL_Delay(100);
+    }
+}
+
+// Hàm xử lý ngắt - được gọi tự động khi nhấn nút
+void EXTI0_IRQHandler(void) {
+    if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0) != RESET) {
+        // Toggle LED
+        HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+        
+        // Clear interrupt flag
+        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+    }
+}</code></pre>
+        </div>
+
+        <div class="code-section">
+            <h3>📊 So sánh ưu nhược điểm</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px;">
+                <div>
+                    <h4 style="color: #3498db;">🔄 POLLING</h4>
+                    <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                        <strong>Ưu điểm:</strong><br>
+                        • Đơn giản, dễ hiểu<br>
+                        • Dễ debug và kiểm soát<br>
+                        • Không cần cấu hình ngắt<br><br>
+                        
+                        <strong>Nhược điểm:</strong><br>
+                        • Tiêu tốn CPU liên tục<br>
+                        • Thời gian phản hồi chậm<br>
+                        • Không hiệu quả với pin<br>
+                        • Khó làm nhiều việc cùng lúc
+                    </div>
+                </div>
+                
+                <div>
+                    <h4 style="color: #e74c3c;">⚡ INTERRUPT</h4>
+                    <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px;">
+                        <strong>Ưu điểm:</strong><br>
+                        • Phản hồi cực nhanh<br>
+                        • Tiết kiệm CPU và pin<br>
+                        • Có thể làm nhiều việc<br>
+                        • Xử lý real-time tốt<br><br>
+                        
+                        <strong>Nhược điểm:</strong><br>
+                        • Phức tạp hơn<br>
+                        • Cần cấu hình cẩn thận<br>
+                        • Có thể xung đột ưu tiên<br>
+                        • Khó debug hơn
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let pollingInterval;
+        let interruptTimeout;
+        let demoRunning = false;
+        
+        // Elements
+        const pollingBtn = document.getElementById('polling-btn');
+        const interruptBtn = document.getElementById('interrupt-btn');
+        const pollingLed = document.getElementById('polling-led');
+        const interruptLed = document.getElementById('interrupt-led');
+        const pollingStatus = document.getElementById('polling-status');
+        const interruptStatus = document.getElementById('interrupt-status');
+        const pollingCpu = document.getElementById('polling-cpu');
+        const interruptCpu = document.getElementById('interrupt-cpu');
+        const pollingResponse = document.getElementById('polling-response');
+        const interruptResponse = document.getElementById('interrupt-response');
+        
+        // Polling simulation
+        let pollingState = false;
+        let pollingCpuUsage = 85;
+        
+        function simulatePolling() {
+            // Giả lập CPU luôn bận kiểm tra
+            pollingCpuUsage = 80 + Math.random() * 10;
+            pollingCpu.textContent = Math.floor(pollingCpuUsage) + '%';
+            
+            // Random response time cho polling
+            const responseTime = 1 + Math.random() * 3;
+            pollingResponse.textContent = '~' + responseTime.toFixed(1) + 'ms';
+            
+            pollingStatus.innerHTML = `System: Polling...<br>CPU: while(1) { check_button(); }`;
+        }
+        
+        // Interrupt simulation  
+        let interruptCpuUsage = 15;
+        
+        function simulateInterrupt() {
+            // CPU thấp khi không có ngắt
+            interruptCpuUsage = 10 + Math.random() * 10;
+            interruptCpu.textContent = Math.floor(interruptCpuUsage) + '%';
+            
+            interruptResponse.textContent = '~0.1ms';
+            interruptStatus.innerHTML = `System: Idle<br>CPU: Doing background tasks...`;
+        }
+        
+        // Button events
+        pollingBtn.addEventListener('mousedown', function() {
+            if (!demoRunning) return;
+            
+            pollingLed.classList.add('on');
+            document.getElementById('polling-pin-pc13').classList.add('active');
+            
+            // Giả lập delay của polling
+            setTimeout(() => {
+                pollingStatus.innerHTML = `System: Button Detected!<br>CPU: Processing in main loop...`;
+            }, 2);
+        });
+        
+        pollingBtn.addEventListener('mouseup', function() {
+            if (!demoRunning) return;
+            
+            pollingLed.classList.remove('on');
+            document.getElementById('polling-pin-pc13').classList.remove('active');
+            
+            setTimeout(() => {
+                pollingStatus.innerHTML = `System: Polling...<br>CPU: while(1) { check_button(); }`;
+            }, 100);
+        });
+        
+        interruptBtn.addEventListener('mousedown', function() {
+            if (!demoRunning) return;
+            
+            // Ngắt xử lý ngay lập tức
+            interruptLed.classList.add('on');
+            document.getElementById('interrupt-pin-pc13').classList.add('active');
+            
+            interruptStatus.innerHTML = `System: INTERRUPT!<br>CPU: Executing ISR immediately...`;
+            
+            // Giả lập CPU spike ngắn khi xử lý ngắt
+            interruptCpu.textContent = '95%';
+            setTimeout(() => {
+                interruptCpu.textContent = Math.floor(10 + Math.random() * 10) + '%';
+            }, 100);
+        });
+        
+        interruptBtn.addEventListener('mouseup', function() {
+            if (!demoRunning) return;
+            
+            interruptLed.classList.remove('on');
+            document.getElementById('interrupt-pin-pc13').classList.remove('active');
+            
+            setTimeout(() => {
+                interruptStatus.innerHTML = `System: Idle<br>CPU: Doing background tasks...`;
+            }, 200);
+        });
+        
+        function startDemo() {
+            demoRunning = true;
+            
+            // Start polling simulation
+            pollingInterval = setInterval(simulatePolling, 100);
+            
+            // Start interrupt simulation  
+            interruptTimeout = setInterval(simulateInterrupt, 500);
+            
+            pollingStatus.innerHTML = `System: Started<br>CPU: Continuously polling...`;
+            interruptStatus.innerHTML = `System: Started<br>CPU: Waiting for interrupts...`;
+        }
+        
+        function stopDemo() {
+            demoRunning = false;
+            
+            clearInterval(pollingInterval);
+            clearInterval(interruptTimeout);
+            
+            pollingStatus.innerHTML = `System: Stopped<br>CPU: Idle`;
+            interruptStatus.innerHTML = `System: Stopped<br>CPU: Idle`;
+        }
+        
+        function resetDemo() {
+            stopDemo();
+            
+            pollingLed.classList.remove('on');
+            interruptLed.classList.remove('on');
+            document.getElementById('polling-pin-pc13').classList.remove('active');
+            document.getElementById('interrupt-pin-pc13').classList.remove('active');
+            
+            pollingCpu.textContent = '0%';
+            interruptCpu.textContent = '0%';
+            pollingResponse.textContent = '~0ms';
+            interruptResponse.textContent = '~0ms';
+            
+            pollingStatus.innerHTML = `System: Ready<br>CPU: Idle`;
+            interruptStatus.innerHTML = `System: Ready<br>CPU: Idle`;
+        }
+        
+        // Auto start demo
+        setTimeout(startDemo, 1000);
+    </script>
+</body>
+</html>
